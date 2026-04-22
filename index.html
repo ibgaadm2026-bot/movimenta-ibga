@@ -40,14 +40,15 @@
         const { useState, useEffect, useMemo, useRef } = React;
 
         // --- Configuração Firebase ---
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-            apiKey: "", authDomain: "", projectId: "", storageBucket: "", messagingSenderId: "", appId: ""
-        };
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'movimenta-ibga-v1';
-
-        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-        const auth = firebase.auth();
+        const firebaseConfig = {
+  apiKey: "AIzaSyCPelE9XhNWyZUtWvosIJ3T5RgPKGDg30I",
+  authDomain: "movimenta-ibga-2d016.firebaseapp.com",
+  databaseURL: "https://movimenta-ibga-2d016-default-rtdb.firebaseio.com",
+  projectId: "movimenta-ibga-2d016",
+  storageBucket: "movimenta-ibga-2d016.firebasestorage.app",
+  messagingSenderId: "89151088970",
+  appId: "1:89151088970:web:d5e4cc0de1ac72fb4779b3"
+};
 
         // --- Helper de Ícones ---
         const Icon = ({ name, size = 18, className = "" }) => {
