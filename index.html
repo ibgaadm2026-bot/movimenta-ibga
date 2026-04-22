@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movimenta IBGA! - Missões & Gestão</title>
+    <!-- Bibliotecas Essenciais via CDN (Versões Minificadas para Velocidade) -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        @media print { .print\:hidden { display: none !important; } body { background: white; } }
+        .verse-gradient { background: linear-gradient(135deg, #F15A24 0%, #FF8C00 100%); }
+        .prayer-gradient { background: linear-gradient(135deg, #3B82F6 0%, #1E40AF 100%); }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+    <div id="root">
+        <!-- Loader de segurança imediato -->
+        <div class="flex items-center justify-center h-screen bg-white">
+            <div class="text-center">
+                <div class="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p class="text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em]">Sincronizando Sistema...</p>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- Configuração Firebase ---
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "", authDomain: "", projectId: "", storageBucket: "", messagingSenderId: "", appId: ""
+        };
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'movimenta-ibga-v1';
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+
+        // --- Helper de Ícones ---
+        const Icon = ({ name, size = 18, className = "" }) => {
+            useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+            return <i data-lucide={name} style={{ width: size, height: size }} className={`inline-block shrink-0 ${className}`}></i>;
+        };
+
+        // --- Componentes Compartilhados ---
+
+        const SidebarButton = ({ id, icon, label, active, onClick }) => (
+            <button onClick={() => onClick(id)} className={`w-full flex flex-row items-center py-3 px-5 transition-all border-l-4 gap-3 ${active === id ? 'text-[#F15A24] bg-orange-50 border-[#F15A24]' : 'text-slate-400 border-transparent hover:bg-slate-50'}`}>
+                {icon} <span className="text-[11px] font-bold tracking-tight uppercase">{label}</span>
+            </button>
+        );
+
+        const Modal = ({ children, onClose, title }) => (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                <div className="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 relative max-h-[90vh] overflow-y-auto scrollbar-hide text-left text-slate-800">
+                    <button onClick={onClose} className="absolute top-6 right-6 text-slate-300 hover:text-red-500 transition-colors"><Icon name="x" size={24} /></button>
+                    {title && <h3 className="text-xl font-black mb-6 uppercase text-slate-800">{title}</h3>}
+                    {children}
+                    <button onClick={onClose} className="w-full mt-6 text-slate-400 font-bold text-[10px] tracking-[0.2em] hover:text-slate-600 transition-colors uppercase pt-4 border-t border-slate-100 text-center">Fechar</button>
+                </div>
+            </div>
+        );
+
+        const StatCard = ({ label, value, color, icon }) => (
+            <div className="bg-white p-5 rounded-[1.8rem] shadow-sm border border-slate-100 flex flex-col items-start gap-1 hover:shadow-md transition-all text-left">
+                <div className={`${color} text-white w-10 h-10 rounded-2xl flex items-center justify-center mb-3 shadow-sm`}>{icon}</div>
+                <span className="text-2xl font-black text-slate-800 leading-none">{value || 0}</span>
+                <span className="text-[9px] font-black text-slate-400 tracking-wider uppercase mt-1">{label}</span>
+            </div>
+        );
+
+        // --- VIEWS ---
+
+        const DashboardView = ({ tasks, visitors, volunteers, assignments, courses, visits, prayers }) => {
+            const tasksDone = tasks.filter(t => t.completed).length;
+            const supportDone = assignments.filter(a => a.completed).length;
+
+            const missionVerses = [
+                { t: "Ide por todo o mundo, pregai o evangelho a toda criatura.", r: "Marcos 16:15" },
+                { t: "Portanto ide, fazei discípulos de todas as nações.", r: "Mateus 28:19" },
+                { t: "Mas recebereis poder ao descer sobre vós o Espírito Santo; e sereis minhas testemunhas.", r: "Atos 1:8" },
+                { t: "Como ouvirão, se não houver quem pregue? E como pregarão, se não forem enviados?", r: "Romanos 10:14-15" },
+                { t: "A quem enviarei, e quem há de ir por nós? Então disse eu: Eis-me aqui, envia-me a mim.", r: "Isaías 6:8" },
+                { t: "A colheita é grande, mas os trabalhadores são poucos.", r: "Lucas 10:2" },
+                { t: "Anunciai entre as nações a sua glória; entre todos os povos as suas maravilhas.", r: "Salmos 96:3" }
+            ];
+            const verse = missionVerses[new Date().getDate() % missionVerses.length];
+
+            return (
+                <div className="space-y-6 animate-in fade-in duration-500 text-left pb-10 print:p-0">
+                    <div className="flex justify-between items-center print:hidden">
+                        <div><h2 className="text-2xl font-black text-slate-800 tracking-tighter uppercase">DASHBOARD</h2><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Visão Geral</p></div>
+                        <button onClick={() => window.print()} className="bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2"><Icon name="printer" size={16} /> RELATÓRIO</button>
+                    </div>
+
+                    <div className="verse-gradient rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden text-left">
+                        <div className="relative z-10 space-y-3">
+                            <div className="flex items-center gap-2 opacity-70"><Icon name="globe" size={14} /><span className="text-[9px] font-black uppercase tracking-[0.2em]">Missões Diárias</span></div>
+                            <p className="text-lg md:text-xl font-bold italic leading-tight">"{verse.t}"</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest">— {verse.r}</p>
+                        </div>
+                        <Icon name="flame" className="absolute right-[-20px] bottom-[-20px] text-white opacity-10" size={120} />
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                        <StatCard label="Missões Ativas" value={tasks.length - tasksDone} color="bg-amber-500" icon={<Icon name="clipboard-list" />} />
+                        <StatCard label="Apoios Pendentes" value={assignments.length - supportDone} color="bg-red-500" icon={<Icon name="hand-helping" />} />
+                        <StatCard label="Visitantes" value={visitors.length} color="bg-[#3FA9F5]" icon={<Icon name="user-plus" />} />
+                        <StatCard label="Oração Pendente" value={prayers.filter(p => !p.completed).length} color="bg-blue-600" icon={<Icon name="heart" />} />
+                    </div>
+                </div>
+            );
+        };
+
+        const CategoriasView = ({ categories, appId }) => {
+            const [show, setShow] = useState(false);
+            const [edit, setEdit] = useState(null);
+            const [name, setName] = useState('');
+            const [mod, setMod] = useState('plano');
+            const save = async (e) => {
+                e.preventDefault();
+                const col = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('categories');
+                if (edit) await col.doc(edit.id).update({ name: String(name), module: String(mod) });
+                else await col.add({ name: String(name), module: String(mod), createdAt: new Date().toISOString() });
+                setShow(false); setEdit(null); setName('');
+            };
+            return (
+                <div className="space-y-6 text-left pb-20">
+                    <div className="flex justify-between items-center text-left"><h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase">Categorias</h2><button onClick={() => { setEdit(null); setName(''); setShow(true); }} className="bg-[#F15A24] text-white p-3 rounded-2xl shadow-lg"><Icon name="plus" size={24} /></button></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-slate-700">
+                        {['plano', 'apoio'].map(m => (
+                            <section key={m} className="space-y-4">
+                                <h3 className="font-black text-xs text-slate-400 uppercase px-1">{m === 'plano' ? 'Plano de Ação' : 'Apoio'}</h3>
+                                <div className="bg-white rounded-2xl border border-slate-100 divide-y divide-slate-50 overflow-hidden">
+                                    {categories.filter(c => String(c.module) === m).map(cat => (
+                                        <div key={cat.id} className="flex justify-between items-center p-4 group">
+                                            <span>{String(cat.name)}</span>
+                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                                <button onClick={() => { setEdit(cat); setName(cat.name); setMod(cat.module); setShow(true); }} className="p-1 text-slate-300 hover:text-blue-500"><Icon name="pencil" size={16}/></button>
+                                                <button onClick={async () => await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('categories').doc(cat.id).delete()} className="p-1 text-slate-300 hover:text-red-500"><Icon name="trash-2" size={16}/></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+                        ))}
+                    </div>
+                    {show && <Modal onClose={() => setShow(false)} title="Categoria"><form onSubmit={save} className="space-y-4">
+                        <div className="flex gap-2"><button type="button" onClick={() => setMod('plano')} className={`flex-1 py-3 rounded-xl border-2 font-bold text-xs ${mod==='plano' ? 'bg-[#F15A24] text-white border-[#F15A24]' : 'text-slate-400'}`}>PLANO</button><button type="button" onClick={() => setMod('apoio')} className={`flex-1 py-3 rounded-xl border-2 font-bold text-xs ${mod==='apoio' ? 'bg-indigo-500 text-white border-indigo-500' : 'text-slate-400'}`}>APOIO</button></div>
+                        <input required placeholder="Nome" className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700" value={name} onChange={e => setName(e.target.value)} />
+                        <button className="w-full bg-[#F15A24] text-white py-4 rounded-2xl font-black">SALVAR</button>
+                    </form></Modal>}
+                </div>
+            );
+        };
+
+        const VoluntariosView = ({ volunteers, sendWhatsApp, appId }) => {
+            const [show, setShow] = useState(false);
+            const [edit, setEdit] = useState(null);
+            const [form, setForm] = useState({ name: '', phone: '', observations: '' });
+            const save = async (e) => {
+                e.preventDefault();
+                const col = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('volunteers');
+                if (edit) await col.doc(edit.id).update(form);
+                else await col.add({ ...form, createdAt: new Date().toISOString() });
+                setShow(false); setEdit(null); setForm({ name: '', phone: '', observations: '' });
+            };
+            return (
+                <div className="space-y-6 text-left pb-20">
+                    <div className="flex justify-between items-center text-left"><h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase">Voluntários</h2><button onClick={() => { setEdit(null); setForm({name:'',phone:'',observations:''}); setShow(true); }} className="bg-indigo-600 text-white p-3 rounded-2xl shadow-lg"><Icon name="plus" size={24} /></button></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {volunteers.map(v => (
+                            <div key={v.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col gap-4 text-left group">
+                                <div className="flex justify-between items-start">
+                                    <div><h4 className="font-bold text-slate-800 text-lg">{String(v.name)}</h4><p className="text-xs text-slate-400 font-bold"><Icon name="phone" size={12} className="mr-1" /> {String(v.phone)}</p></div>
+                                    <div className="flex gap-1">
+                                        <button onClick={() => sendWhatsApp(v.phone, "Olá!")} className="text-emerald-500 p-2 hover:bg-emerald-50 rounded-xl"><Icon name="message-circle" size={20} /></button>
+                                        <button onClick={() => { setEdit(v); setForm({name:v.name, phone:v.phone, observations:v.observations}); setShow(true); }} className="p-2 text-slate-300 hover:text-blue-500"><Icon name="pencil" size={18} /></button>
+                                        <button onClick={async () => await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('volunteers').doc(v.id).delete()} className="p-2 text-slate-300 hover:text-red-500"><Icon name="trash-2" size={18} /></button>
+                                    </div>
+                                </div>
+                                <p className="text-sm text-slate-500 italic bg-slate-50 p-3 rounded-xl">"{String(v.observations)}"</p>
+                            </div>
+                        ))}
+                    </div>
+                    {show && <Modal onClose={() => setShow(false)} title="Voluntário"><form onSubmit={save} className="space-y-4">
+                        <input required placeholder="Nome" className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+                        <input required placeholder="WhatsApp" className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
+                        <textarea required placeholder="Como pode servir?" className="w-full p-4 bg-slate-50 rounded-2xl outline-none h-32 resize-none text-slate-700 font-medium" value={form.observations} onChange={e => setForm({...form, observations: e.target.value})} />
+                        <button className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black">Salvar</button>
+                    </form></Modal>}
+                </div>
+            );
+        };
+
+        const PlanoAcaoView = ({ tasks, categories, appId }) => {
+            const [show, setShow] = useState(false);
+            const [edit, setEdit] = useState(null);
+            const [form, setForm] = useState({ description: '', date: '', time: '', categoryId: '' });
+            const valid = categories.filter(c => String(c.module) === 'plano');
+            const save = async (e) => {
+                e.preventDefault();
+                const cat = categories.find(c => c.id === form.categoryId);
+                const col = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('tasks');
+                if (edit) await col.doc(edit.id).update({ ...form, categoryName: String(cat?.name || 'Geral') });
+                else await col.add({ ...form, categoryName: String(cat?.name || 'Geral'), completed: false, createdAt: new Date().toISOString() });
+                setShow(false); setEdit(null); setForm({ description: '', date: '', time: '', categoryId: '' });
+            };
+            return (
+                <div className="space-y-6 text-left pb-20">
+                    <div className="flex justify-between items-center text-left"><h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase">Plano de Ação</h2><button onClick={() => { setEdit(null); setForm({description:'',date:'',time:'',categoryId:''}); setShow(true); }} className="bg-[#F15A24] text-white p-3 rounded-2xl shadow-lg"><Icon name="plus" size={24} /></button></div>
+                    <div className="grid gap-3">
+                        {tasks.map(t => (
+                            <div key={t.id} className="bg-white p-4 rounded-2xl border border-slate-100 flex items-center gap-4 shadow-sm group text-left">
+                                <button onClick={async() => await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('tasks').doc(t.id).update({ completed: !t.completed })} className={t.completed ? 'text-emerald-500' : 'text-slate-300'}><Icon name={t.completed ? "check-circle-2" : "circle"} size={24} /></button>
+                                <div className="flex-1 min-w-0">
+                                    <span className="text-[9px] font-black text-[#F15A24] bg-orange-50 px-2 py-0.5 rounded uppercase">{String(t.categoryName)}</span>
+                                    <h4 className={`font-bold text-slate-800 mt-1 truncate ${t.completed ? 'line-through opacity-50' : ''}`}>{String(t.description)}</h4>
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{String(t.date)} - {String(t.time)}</p>
+                                </div>
+                                <div className="flex gap-1">
+                                    <button onClick={() => { setEdit(t); setForm({description:t.description, date:t.date, time:t.time, categoryId:t.categoryId}); setShow(true); }} className="p-2 text-slate-300 hover:text-blue-500"><Icon name="pencil" size={18} /></button>
+                                    <button onClick={async () => await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('tasks').doc(t.id).delete()} className="p-2 text-slate-300 hover:text-red-500"><Icon name="trash-2" size={18} /></button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    {show && <Modal onClose={() => setShow(false)} title="Missão"><form onSubmit={save} className="space-y-4">
+                        <select required className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700" value={form.categoryId} onChange={e => setForm({...form, categoryId: e.target.value})}><option value="">Categoria</option>{valid.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                        <input required placeholder="Descrição" className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700" value={form.description} onChange={e => setForm({...form, description: e.target.value})} />
+                        <div className="grid grid-cols-2 gap-4"><input required type="date" className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700" value={form.date} onChange={e => setForm({...form, date: e.target.value})} /><input required type="time" className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700" value={form.time} onChange={e => setForm({...form, time: e.target.value})} /></div>
+                        <button className="w-full bg-[#F15A24] text-white py-4 rounded-2xl font-black">Salvar</button>
+                    </form></Modal>}
+                </div>
+            );
+        };
+
+        const ApoioView = ({ assignments, volunteers, categories, appId }) => {
+            const [show, setShow] = useState(false);
+            const [edit, setEdit] = useState(null);
+            const [form, setForm] = useState({ volunteerId: '', beneficiaryName: '', categoryId: '', action: '' });
+            const valid = categories.filter(c => String(c.module) === 'apoio');
+            const save = async (e) => {
+                e.preventDefault();
+                const vol = volunteers.find(v => v.id === form.volunteerId);
+                const cat = categories.find(c => c.id === form.categoryId);
+                const col = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('support_assignments');
+                const data = { ...form, volunteerName: String(vol?.name || 'Voluntário'), categoryName: String(cat?.name || 'Apoio'), updatedAt: new Date().toISOString() };
+                if (edit) await col.doc(edit.id).update(data);
+                else await col.add({ ...data, completed: false, createdAt: new Date().toISOString() });
+                setShow(false); setEdit(null); setForm({ volunteerId: '', beneficiaryName: '', categoryId: '', action: '' });
+            };
+            return (
+                <div className="space-y-6 text-left pb-20">
+                    <div className="flex justify-between items-center text-left"><h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase">Apoio</h2><button onClick={() => { setEdit(null); setForm({volunteerId:'',beneficiaryName:'',categoryId:'',action:''}); setShow(true); }} className="bg-indigo-600 text-white p-3 rounded-2xl shadow-lg"><Icon name="plus" size={24} /></button></div>
+                    <div className="grid gap-4">
+                        {assignments.map(a => (
+                            <div key={a.id} className={`bg-white p-6 rounded-[2rem] border transition-all flex flex-col gap-4 shadow-sm ${a.completed ? 'opacity-60 bg-emerald-50/20 border-emerald-100' : 'border-slate-100'} group text-left`}>
+                                <div className="flex justify-between items-start gap-4 text-left">
+                                   <button onClick={async() => await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('support_assignments').doc(a.id).update({ completed: !a.completed })} className={`mt-1 transition-colors ${a.completed ? 'text-emerald-500' : 'text-slate-300'}`}><Icon name={a.completed ? "check-circle-2" : "circle"} size={28} /></button>
+                                   <div className="flex-1"><div className="flex items-center gap-2 mb-1 text-left text-slate-800"><span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${a.completed ? 'bg-emerald-100 text-emerald-600' : 'bg-orange-100 text-orange-600'}`}>{a.completed ? 'Resolvido' : 'Pendente'}</span><span className="text-[9px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-widest">{String(a.categoryName)}</span></div><h4 className={`font-bold text-slate-800 text-lg ${a.completed ? 'line-through' : ''}`}>Para: {String(a.beneficiaryName)}</h4></div>
+                                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all text-left">
+                                     <button onClick={() => { setEdit(a); setForm({ volunteerId: a.volunteerId, beneficiaryName: a.beneficiaryName, categoryId: a.categoryId, action: a.action }); setShow(true); }} className="p-2 text-slate-300 hover:text-blue-500"><Icon name="pencil" size={18} /></button>
+                                     <button onClick={async() => await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('support_assignments').doc(a.id).delete()} className="p-2 text-slate-300 hover:text-red-500"><Icon name="trash-2" size={18} /></button>
+                                   </div>
+                                </div>
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-4 border-t border-slate-100/50 pt-4 text-left"><div className="flex items-center gap-2"><Icon name="users" className="text-[#F15A24]" size={14} /><span className="text-sm font-bold text-slate-700">Voluntário: {String(a.volunteerName)}</span></div><div className="flex-1"><p className="text-xs text-slate-500 italic">"{String(a.action)}"</p></div></div>
+                            </div>
+                        ))}
+                    </div>
+                    {show && <Modal onClose={() => setShow(false)} title="Lançar Apoio"><form onSubmit={save} className="space-y-4">
+                        <select required className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm text-slate-700 border-2 border-transparent focus:border-indigo-200" value={form.volunteerId} onChange={e => setForm({...form, volunteerId: e.target.value})}><option value="">Voluntário</option>{volunteers.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select>
+                        <input required placeholder="Beneficiário" className="w-full p-4 bg-slate-50 rounded-2xl outline-none text-sm font-bold text-slate-700 border-2 border-transparent focus:border-indigo-200" value={form.beneficiaryName} onChange={e => setForm({...form, beneficiaryName: e.target.value})} />
+                        <select required className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm text-slate-700 border-2 border-transparent focus:border-indigo-200" value={form.categoryId} onChange={e => setForm({...form, categoryId: e.target.value})}><option value="">Categoria</option>{valid.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                        <textarea required placeholder="Ação..." className="w-full p-4 bg-slate-50 rounded-2xl outline-none h-24 text-sm text-slate-700 border-2 border-transparent focus:border-indigo-200 resize-none font-medium" value={form.action} onChange={e => setForm({...form, action: e.target.value})} />
+                        <button className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black">Salvar</button>
+                    </form></Modal>}
+                </div>
+            );
+        };
+
+        const VisitantesView = ({ visitors, sendWhatsApp, appId }) => {
+            const [show, setShow] = useState(false);
+            const [edit, setEdit] = useState(null);
+            const [form, setForm] = useState({ name: '', phone: '', date: '' });
+            const save = async (e) => {
+                e.preventDefault();
+                const col = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('visitors');
+                if (edit) await col.doc(edit.id).update(form);
+                else await col.add({ ...form, createdAt: new Date().toISOString() });
+                setShow(false); setEdit(null); setForm({ name: '', phone: '', date: '' });
+            };
+            return (
+                <div className="space-y-6 text-left pb-20">
+                    <div className="flex justify-between items-center text-left"><h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase">Visitantes</h2><button onClick={() => { setEdit(null); setForm({name:'',phone:'',date:''}); setShow(true); }} className="bg-[#3FA9F5] text-white p-3 rounded-2xl shadow-lg"><Icon name="plus" size={24} /></button></div>
+                    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm divide-y divide-slate-50 overflow-hidden text-slate-700">
+                        {visitors.map(v => (
+                            <div key={v.id} className="flex justify-between items-center p-4 hover:bg-slate-50 group transition-all">
+                                <div className="flex-1 min-w-0"><p className="font-bold text-slate-800 text-sm truncate">{String(v.name || 'Sem Nome')}</p><p className="text-[9px] text-slate-400 uppercase font-bold text-left">{String(v.date || 'Sem Data')}</p></div>
+                                <div className="flex gap-2 items-center">
+                                    <button onClick={() => sendWhatsApp(v.phone, "Olá amado(a), obrigado pela visita!")} className="text-emerald-500 p-2 hover:bg-emerald-50 rounded-xl"><Icon name="message-circle" size={18} /></button>
+                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all text-left"><button onClick={() => { setEdit(v); setForm({name:v.name, phone:v.phone, date:v.date}); setShow(true); }} className="p-1 text-slate-300 hover:text-blue-500"><Icon name="pencil" size={16} /></button><button onClick={async () => await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('visitors').doc(v.id).delete()} className="p-1 text-slate-300 hover:text-red-500"><Icon name="trash-2" size={16} /></button></div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    {show && <Modal onClose={() => setShow(false)} title="Visitante"><form onSubmit={save} className="space-y-4"><input required placeholder="Nome" className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /><input required placeholder="WhatsApp" className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} /><input required type="date" className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700" value={form.date} onChange={e => setForm({...form, date: e.target.value})} /><button className="w-full bg-[#3FA9F5] text-white py-4 rounded-2xl font-black uppercase">Salvar</button></form></Modal>}
+                </div>
+            );
+        };
+
+        const VisitasView = ({ visits, visitors, appId }) => {
+            const [show, setShow] = useState(false);
+            const [edit, setEdit] = useState(null);
+            const [form, setForm] = useState({ personId: '', date: '' });
+            const save = async (e) => {
+                e.preventDefault();
+                const person = visitors.find(v => v.id === form.personId);
+                const data = { ...form, personName: String(person?.name || 'Anônimo'), updatedAt: new Date().toISOString() };
+                const col = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('visits');
+                if (edit) await col.doc(edit.id).update(data);
+                else await col.add({ ...data, completed: false, createdAt: new Date().toISOString() });
+                setShow(false); setEdit(null); setForm({ personId: '', date: '' });
+            };
+            return (
+                <div className="space-y-6 h-full text-left pb-20">
+                    <div className="flex justify-between items-center text-left"><h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase">Visitas</h2><button onClick={() => { setEdit(null); setForm({personId:'',date:''}); setShow(true); }} className="bg-emerald-500 text-white p-3 rounded-2xl shadow-lg hover:bg-emerald-600 transition-all"><Icon name="plus" size={24} /></button></div>
+                    <div className="space-y-3">
+                        {visits.map(v => (
+                            <div key={v.id} className={`bg-white p-5 rounded-2xl border flex items-center gap-4 shadow-sm group ${v.completed ? 'opacity-60 bg-emerald-50/20 border-emerald-100' : 'border-slate-100'} text-left`}>
+                                <button onClick={async() => await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('visits').doc(v.id).update({ completed: !v.completed })} className={`transition-colors ${v.completed ? 'text-emerald-500' : 'text-slate-300'}`}><Icon name={v.completed ? "check-circle-2" : "circle"} size={28} /></button>
+                                <div className="flex-1 min-w-0 text-left text-slate-800"><span className={`text-[8px] font-black px-2 py-0.5 rounded uppercase ${v.completed ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>{v.completed ? 'Visitado' : 'Pendente'}</span><p className={`font-bold text-slate-700 text-sm truncate ${v.completed ? 'line-through' : ''}`}>{String(v.personName)}</p><p className="text-[10px] text-slate-400 font-black uppercase">{String(v.date)}</p></div>
+                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all text-left"><button onClick={() => { setEdit(v); setForm({ personId: v.personId, date: v.date }); setShow(true); }} className="p-2 text-slate-300 hover:text-blue-500"><Icon name="pencil" size={16}/></button><button onClick={async() => await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('visits').doc(v.id).delete()} className="p-2 text-slate-300 hover:text-red-500 transition-all"><Icon name="trash-2" size={16} /></button></div>
+                            </div>
+                        ))}
+                    </div>
+                    {show && <Modal onClose={() => setShow(false)} title="Agendar"><form onSubmit={save} className="space-y-4"><select required className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm text-slate-700 border-2 border-transparent focus:border-emerald-200" value={form.personId} onChange={e => setForm({...form, personId: e.target.value})}><option value="">Escolher Pessoa</option>{visitors.map(v => <option key={v.id} value={v.id}>{String(v.name)}</option>)}</select><input required type="date" className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm text-slate-700 border-2 border-transparent focus:border-emerald-200" value={form.date} onChange={e => setForm({...form, date: e.target.value})} /><button className="w-full bg-emerald-500 text-white py-4 rounded-2xl font-black">Salvar</button></form></Modal>}
+                </div>
+            );
+        };
+
+        const OracaoView = ({ prayers, appId }) => {
+            const [show, setShow] = useState(false);
+            const [edit, setEdit] = useState(null);
+            const [form, setForm] = useState({ motivo: '', pedido: '' });
+            const verses = [
+                { t: "Orai sem cessar.", r: "1 Tessalonicenses 5:17" },
+                { t: "A oração de um justo é poderosa e eficaz.", r: "Tiago 5:16" },
+                { t: "Pedi, e dar-se-vos-á; buscai, e encontrareis.", r: "Mateus 7:7" }
+            ];
+            const daily = verses[new Date().getDate() % verses.length];
+
+            const save = async (e) => {
+                e.preventDefault();
+                const col = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('prayers');
+                if (edit) await col.doc(edit.id).update(form);
+                else await col.add({ ...form, completed: false, createdAt: new Date().toISOString() });
+                setShow(false); setEdit(null); setForm({ motivo: '', pedido: '' });
+            };
+            return (
+                <div className="space-y-8 animate-in fade-in duration-500 text-left pb-20">
+                    <div className="prayer-gradient rounded-[2.5rem] p-8 md:p-10 text-white shadow-xl relative overflow-hidden text-left text-slate-800">
+                        <div className="relative z-10 space-y-3">
+                            <h2 className="text-white/80 font-bold text-[9px] uppercase tracking-[0.3em]">Momento de Intercessão</h2>
+                            <p className="text-lg md:text-xl font-bold italic leading-tight text-white">"{daily.t}"</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-white">— {daily.r}</p>
+                        </div>
+                        <Icon name="plus" size={100} className="absolute right-[-20px] bottom-[-20px] text-white opacity-10 rotate-12" />
+                    </div>
+                    <div className="flex justify-between items-center px-1 text-left"><div><h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase">Pedidos de Oração</h2></div><button onClick={() => { setEdit(null); setForm({motivo:'',pedido:''}); setShow(true); }} className="bg-blue-600 text-white p-3 rounded-2xl shadow-lg hover:bg-blue-700 text-left"><Icon name="plus" size={24} /></button></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {prayers.map(p => (
+                            <div key={p.id} className={`bg-white p-8 rounded-[2.5rem] shadow-sm border relative group transition-all text-left text-slate-800 ${p.completed ? 'bg-blue-50/30 border-blue-100 opacity-60' : 'border-blue-50'}`}>
+                                <div className="flex items-start gap-4">
+                                    <button onClick={async() => await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('prayers').doc(p.id).update({ completed: !p.completed })} className={p.completed ? 'text-blue-600' : 'text-slate-300'}><Icon name={p.completed ? "check-circle-2" : "circle"} size={28} /></button>
+                                    <div className="flex-1 text-left text-slate-800"><div className="flex items-center gap-2 mb-3"><span className={`text-[8px] font-black px-2 py-0.5 rounded uppercase ${p.completed ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>{p.completed ? 'Resolvido' : 'Pendente'}</span><h4 className="font-black uppercase tracking-widest text-xs text-blue-700">{String(p.motivo)}</h4></div><p className={`text-slate-600 text-base italic font-medium leading-relaxed ${p.completed ? 'line-through' : ''}`}>"{String(p.pedido)}"</p></div>
+                                </div>
+                                <div className="absolute top-8 right-8 flex gap-2 opacity-0 group-hover:opacity-100 transition-all text-left"><button onClick={() => { setEdit(p); setForm({motivo:p.motivo, pedido:p.pedido}); setShow(true); }} className="p-2 text-slate-300 hover:text-blue-500"><Icon name="pencil" size={18}/></button><button onClick={async() => await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('prayers').doc(p.id).delete()} className="p-2 text-slate-300 hover:text-red-400"><Icon name="trash-2" size={18}/></button></div>
+                            </div>
+                        ))}
+                    </div>
+                    {show && <Modal onClose={() => setShow(false)} title="Oração"><form onSubmit={save} className="space-y-4">
+                        <input required placeholder="Causa" className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700 border-2 border-transparent focus:border-blue-200" value={form.motivo} onChange={e => setForm({...form, motivo: e.target.value})} />
+                        <textarea required placeholder="Como podemos orar?" className="w-full p-4 bg-slate-50 rounded-2xl outline-none h-32 text-slate-700 border-2 border-transparent focus:border-blue-200 resize-none text-sm font-medium" value={form.pedido} onChange={e => setForm({...form, pedido: e.target.value})} />
+                        <button className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-xs">Salvar</button>
+                    </form></Modal>}
+                </div>
+            );
+        };
+
+        const CursosView = ({ courses, appId }) => {
+            const [show, setShow] = useState(false);
+            const [edit, setEdit] = useState(null);
+            const [form, setForm] = useState({ title: '', description: '', status: 'projeto' });
+            const save = async (e) => {
+                e.preventDefault();
+                const col = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('courses');
+                if (edit) await col.doc(edit.id).update(form);
+                else await col.add({ ...form, createdAt: new Date().toISOString() });
+                setShow(false); setEdit(null); setForm({ title: '', description: '', status: 'projeto' });
+            };
+            return (
+                <div className="space-y-6 text-left pb-20 text-slate-800">
+                    <div className="flex justify-between items-center text-left text-slate-800"><h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase">Cursos</h2><button onClick={() => { setEdit(null); setForm({title:'',description:'',status:'projeto'}); setShow(true); }} className="bg-blue-600 text-white p-3 rounded-2xl shadow-lg transition-transform hover:scale-105 text-left"><Icon name="plus" size={24} /></button></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-slate-800">
+                        {courses.map(c => (
+                            <div key={c.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col gap-4 text-left group transition-all text-slate-800">
+                                <div className="flex justify-between text-left">
+                                    <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${c.status === 'execucao' ? 'bg-emerald-100 text-emerald-600' : 'bg-orange-100 text-orange-600'}`}>{c.status === 'execucao' ? 'Em Execução' : 'Projeto'}</div>
+                                    <div className="flex gap-2 text-left opacity-0 group-hover:opacity-100 transition-all">
+                                        <button onClick={() => { setEdit(c); setForm({title:c.title, description:c.description, status:c.status}); setShow(true); }} className="p-2 text-slate-300 hover:text-blue-500"><Icon name="pencil" size={14}/></button>
+                                        <button onClick={async() => await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('courses').doc(c.id).delete()} className="p-2 text-slate-300 hover:text-red-500"><Icon name="trash-2" size={14}/></button>
+                                    </div>
+                                </div>
+                                <h4 className="font-bold text-slate-800 text-lg">{String(c.title)}</h4>
+                                <p className="text-sm text-slate-500 italic leading-relaxed text-left text-left">"{String(c.description)}"</p>
+                                <div className="flex gap-2 pt-4 border-t border-slate-50 text-left">
+                                     <button onClick={async() => await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('courses').doc(c.id).update({ status: 'projeto' })} className={`flex-1 py-2 rounded-xl text-[10px] font-black transition-all ${c.status === 'projeto' ? 'bg-orange-500 text-white shadow-lg' : 'bg-slate-50 text-slate-400'}`}>PROJETO</button>
+                                     <button onClick={async() => await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('courses').doc(c.id).update({ status: 'execucao' })} className={`flex-1 py-2 rounded-xl text-[10px] font-black transition-all ${c.status === 'execucao' ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-50 text-slate-400'}`}>EXECUÇÃO</button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    {show && <Modal onClose={() => setShow(false)} title="Curso"><form onSubmit={save} className="space-y-4">
+                        <input required placeholder="Título" className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /><textarea required placeholder="Resumo..." className="w-full p-4 bg-slate-50 rounded-2xl outline-none h-32 text-slate-700 border-2 border-transparent focus:border-blue-200" value={form.description} onChange={e => setForm({...form, description: e.target.value})} />
+                        <button className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-lg">Salvar</button>
+                    </form></Modal>}
+                </div>
+            );
+        };
+
+        // --- COMPONENTE PRINCIPAL APP ---
+
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [loading, setLoading] = useState(true);
+            const [user, setUser] = useState(null);
+
+            const [tasks, setTasks] = useState([]);
+            const [categories, setCategories] = useState([]);
+            const [volunteers, setVolunteers] = useState([]);
+            const [supportAssignments, setSupportAssignments] = useState([]);
+            const [visits, setVisits] = useState([]);
+            const [visitors, setVisitors] = useState([]);
+            const [prayers, setPrayers] = useState([]);
+            const [courses, setCourses] = useState([]);
+
+            useEffect(() => {
+                const initAuth = async () => {
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await auth.signInWithCustomToken(__initial_auth_token);
+                        } else {
+                            await auth.signInAnonymously();
+                        }
+                    } catch (err) { 
+                        console.error("Login fail:", err);
+                        // Fallback se falhar rede
+                        setLoading(false);
+                    }
+                };
+                initAuth();
+                const unsubscribe = auth.onAuthStateChanged((u) => {
+                    if (u) { setUser(u); setLoading(false); }
+                    else if (loading) setTimeout(() => setLoading(false), 2000); 
+                });
+                return () => unsubscribe();
+            }, []);
+
+            useEffect(() => {
+                if (!user) return;
+                const collections = [
+                    { n: 'tasks', s: setTasks },
+                    { n: 'categories', s: setCategories },
+                    { n: 'volunteers', s: setVolunteers },
+                    { n: 'support_assignments', s: setSupportAssignments },
+                    { n: 'visits', s: setVisits },
+                    { n: 'visitors', s: setVisitors },
+                    { n: 'prayers', s: setPrayers },
+                    { n: 'courses', s: setCourses }
+                ];
+                const unsubscribes = collections.map(col => {
+                    return db.collection('artifacts').doc(appId).collection('public').doc('data').collection(col.n)
+                        .onSnapshot(snap => col.s(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))), err => console.error("Perm Error:", col.n, err));
+                });
+                return () => unsubscribes.forEach(u => u());
+            }, [user]);
+
+            const sendWhatsApp = (phone, message) => {
+                const cleanPhone = String(phone).replace(/\D/g, '');
+                window.open(`https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+            };
+
+            if (loading) return <div className="flex items-center justify-center h-screen bg-orange-50"><div className="animate-spin rounded-full h-12 w-12 border-t-4 border-orange-500 border-t-transparent"></div></div>;
+
+            return (
+                <div className="flex h-screen bg-slate-50 text-slate-800 overflow-hidden font-sans text-left">
+                    <nav className="w-56 bg-white border-r border-slate-100 flex flex-col py-4 z-20 shadow-sm overflow-y-auto scrollbar-hide print:hidden text-left">
+                        <div className="px-5 mb-6 flex items-center gap-3 text-left"><Icon name="flame" className="text-[#F15A24] animate-pulse text-left" /><span className="font-black text-[10px] text-slate-400 tracking-widest uppercase">Sistema</span></div>
+                        <div className="flex flex-col gap-y-0.5">
+                            <SidebarButton id="dashboard" icon={<Icon name="home" />} label="Início" active={activeTab} onClick={setActiveTab} />
+                            <SidebarButton id="categories" icon={<Icon name="tag" />} label="Categorias" active={activeTab} onClick={setActiveTab} />
+                            <SidebarButton id="voluntarios" icon={<Icon name="users" />} label="Voluntários" active={activeTab} onClick={setActiveTab} />
+                            <SidebarButton id="plano" icon={<Icon name="clipboard-list" />} label="Plano de Ação" active={activeTab} onClick={setActiveTab} />
+                            <SidebarButton id="apoio" icon={<Icon name="hand-helping" />} label="Apoio" active={activeTab} onClick={setActiveTab} />
+                            <SidebarButton id="visitantes" icon={<Icon name="user-plus" />} label="Visitantes" active={activeTab} onClick={setActiveTab} />
+                            <SidebarButton id="visitas" icon={<Icon name="map-pin" />} label="Visitas" active={activeTab} onClick={setActiveTab} />
+                            <SidebarButton id="oracao" icon={<Icon name="plus" strokeWidth={3} />} label="Oração" active={activeTab} onClick={setActiveTab} />
+                            <SidebarButton id="courses" icon={<Icon name="graduation-cap" />} label="Cursos" active={activeTab} onClick={setActiveTab} />
+                        </div>
+                    </nav>
+                    <div className="flex-1 flex flex-col h-full overflow-hidden text-left">
+                        <header className="bg-white px-8 py-5 shadow-sm flex items-center justify-start z-10 border-b border-slate-50 print:hidden text-left text-slate-800"><div className="flex flex-col text-left"><h1 className="font-black text-xl text-[#F15A24] tracking-tighter leading-none uppercase">MOVIMENTA IBGA!</h1><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">MISSÕES & GESTÃO</p></div></header>
+                        <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50/50 print:bg-white print:p-0 text-left text-slate-800">
+                            <div className="max-w-6xl mx-auto text-left text-slate-800">
+                                {activeTab === 'dashboard' && <DashboardView tasks={tasks} visitors={visitors} volunteers={volunteers} assignments={supportAssignments} courses={courses} visits={visits} prayers={prayers} />}
+                                {activeTab === 'categories' && <CategoriasView categories={categories} appId={appId} />}
+                                {activeTab === 'voluntarios' && <VoluntariosView volunteers={volunteers} sendWhatsApp={sendWhatsApp} appId={appId} />}
+                                {activeTab === 'plano' && <PlanoAcaoView tasks={tasks} categories={categories} appId={appId} />}
+                                {activeTab === 'apoio' && <ApoioView assignments={supportAssignments} volunteers={volunteers} categories={categories} appId={appId} />}
+                                {activeTab === 'visitantes' && <VisitantesView visitors={visitors} sendWhatsApp={sendWhatsApp} appId={appId} />}
+                                {activeTab === 'visitas' && <VisitasView visits={visits} visitors={visitors} appId={appId} />}
+                                {activeTab === 'oracao' && <OracaoView prayers={prayers} appId={appId} />}
+                                {activeTab === 'courses' && <CursosView courses={courses} appId={appId} />}
+                            </div>
+                        </main>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
