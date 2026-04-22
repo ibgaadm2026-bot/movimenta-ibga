@@ -15,7 +15,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
@@ -35,35 +34,28 @@
             </div>
         </div>
     </div>
-
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
-
         // --- Configuração Firebase ---
         const firebaseConfig = {
   apiKey: "AIzaSyCPelE9XhNWyZUtWvosIJ3T5RgPKGDg30I",
   authDomain: "movimenta-ibga-2d016.firebaseapp.com",
-  databaseURL: "https://movimenta-ibga-2d016-default-rtdb.firebaseio.com",
   projectId: "movimenta-ibga-2d016",
-  storageBucket: "movimenta-ibga-2d016.firebasestorage.app",
+  storageBucket: "movimenta-ibga-2d016.appspot.com",
   messagingSenderId: "89151088970",
   appId: "1:89151088970:web:d5e4cc0de1ac72fb4779b3"
 };
-
         // --- Helper de Ícones ---
         const Icon = ({ name, size = 18, className = "" }) => {
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
             return <i data-lucide={name} style={{ width: size, height: size }} className={`inline-block shrink-0 ${className}`}></i>;
         };
-
         // --- Componentes Compartilhados ---
-
         const SidebarButton = ({ id, icon, label, active, onClick }) => (
             <button onClick={() => onClick(id)} className={`w-full flex flex-row items-center py-3 px-5 transition-all border-l-4 gap-3 ${active === id ? 'text-[#F15A24] bg-orange-50 border-[#F15A24]' : 'text-slate-400 border-transparent hover:bg-slate-50'}`}>
                 {icon} <span className="text-[11px] font-bold tracking-tight uppercase">{label}</span>
             </button>
         );
-
         const Modal = ({ children, onClose, title }) => (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
                 <div className="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 relative max-h-[90vh] overflow-y-auto scrollbar-hide text-left text-slate-800">
@@ -74,7 +66,6 @@
                 </div>
             </div>
         );
-
         const StatCard = ({ label, value, color, icon }) => (
             <div className="bg-white p-5 rounded-[1.8rem] shadow-sm border border-slate-100 flex flex-col items-start gap-1 hover:shadow-md transition-all text-left">
                 <div className={`${color} text-white w-10 h-10 rounded-2xl flex items-center justify-center mb-3 shadow-sm`}>{icon}</div>
@@ -82,13 +73,10 @@
                 <span className="text-[9px] font-black text-slate-400 tracking-wider uppercase mt-1">{label}</span>
             </div>
         );
-
         // --- VIEWS ---
-
         const DashboardView = ({ tasks, visitors, volunteers, assignments, courses, visits, prayers }) => {
             const tasksDone = tasks.filter(t => t.completed).length;
             const supportDone = assignments.filter(a => a.completed).length;
-
             const missionVerses = [
                 { t: "Ide por todo o mundo, pregai o evangelho a toda criatura.", r: "Marcos 16:15" },
                 { t: "Portanto ide, fazei discípulos de todas as nações.", r: "Mateus 28:19" },
@@ -99,14 +87,12 @@
                 { t: "Anunciai entre as nações a sua glória; entre todos os povos as suas maravilhas.", r: "Salmos 96:3" }
             ];
             const verse = missionVerses[new Date().getDate() % missionVerses.length];
-
             return (
                 <div className="space-y-6 animate-in fade-in duration-500 text-left pb-10 print:p-0">
                     <div className="flex justify-between items-center print:hidden">
                         <div><h2 className="text-2xl font-black text-slate-800 tracking-tighter uppercase">DASHBOARD</h2><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Visão Geral</p></div>
                         <button onClick={() => window.print()} className="bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2"><Icon name="printer" size={16} /> RELATÓRIO</button>
                     </div>
-
                     <div className="verse-gradient rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden text-left">
                         <div className="relative z-10 space-y-3">
                             <div className="flex items-center gap-2 opacity-70"><Icon name="globe" size={14} /><span className="text-[9px] font-black uppercase tracking-[0.2em]">Missões Diárias</span></div>
@@ -115,7 +101,6 @@
                         </div>
                         <Icon name="flame" className="absolute right-[-20px] bottom-[-20px] text-white opacity-10" size={120} />
                     </div>
-
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                         <StatCard label="Missões Ativas" value={tasks.length - tasksDone} color="bg-amber-500" icon={<Icon name="clipboard-list" />} />
                         <StatCard label="Apoios Pendentes" value={assignments.length - supportDone} color="bg-red-500" icon={<Icon name="hand-helping" />} />
@@ -125,7 +110,6 @@
                 </div>
             );
         };
-
         const CategoriasView = ({ categories, appId }) => {
             const [show, setShow] = useState(false);
             const [edit, setEdit] = useState(null);
@@ -167,7 +151,6 @@
                 </div>
             );
         };
-
         const VoluntariosView = ({ volunteers, sendWhatsApp, appId }) => {
             const [show, setShow] = useState(false);
             const [edit, setEdit] = useState(null);
@@ -206,7 +189,6 @@
                 </div>
             );
         };
-
         const PlanoAcaoView = ({ tasks, categories, appId }) => {
             const [show, setShow] = useState(false);
             const [edit, setEdit] = useState(null);
@@ -248,7 +230,6 @@
                 </div>
             );
         };
-
         const ApoioView = ({ assignments, volunteers, categories, appId }) => {
             const [show, setShow] = useState(false);
             const [edit, setEdit] = useState(null);
@@ -292,7 +273,6 @@
                 </div>
             );
         };
-
         const VisitantesView = ({ visitors, sendWhatsApp, appId }) => {
             const [show, setShow] = useState(false);
             const [edit, setEdit] = useState(null);
@@ -322,7 +302,6 @@
                 </div>
             );
         };
-
         const VisitasView = ({ visits, visitors, appId }) => {
             const [show, setShow] = useState(false);
             const [edit, setEdit] = useState(null);
@@ -352,7 +331,6 @@
                 </div>
             );
         };
-
         const OracaoView = ({ prayers, appId }) => {
             const [show, setShow] = useState(false);
             const [edit, setEdit] = useState(null);
@@ -363,7 +341,6 @@
                 { t: "Pedi, e dar-se-vos-á; buscai, e encontrareis.", r: "Mateus 7:7" }
             ];
             const daily = verses[new Date().getDate() % verses.length];
-
             const save = async (e) => {
                 e.preventDefault();
                 const col = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('prayers');
@@ -401,7 +378,6 @@
                 </div>
             );
         };
-
         const CursosView = ({ courses, appId }) => {
             const [show, setShow] = useState(false);
             const [edit, setEdit] = useState(null);
@@ -442,14 +418,11 @@
                 </div>
             );
         };
-
         // --- COMPONENTE PRINCIPAL APP ---
-
         const App = () => {
             const [activeTab, setActiveTab] = useState('dashboard');
             const [loading, setLoading] = useState(true);
             const [user, setUser] = useState(null);
-
             const [tasks, setTasks] = useState([]);
             const [categories, setCategories] = useState([]);
             const [volunteers, setVolunteers] = useState([]);
@@ -458,7 +431,6 @@
             const [visitors, setVisitors] = useState([]);
             const [prayers, setPrayers] = useState([]);
             const [courses, setCourses] = useState([]);
-
             useEffect(() => {
                 const initAuth = async () => {
                     try {
@@ -480,7 +452,6 @@
                 });
                 return () => unsubscribe();
             }, []);
-
             useEffect(() => {
                 if (!user) return;
                 const collections = [
@@ -504,9 +475,7 @@
                 const cleanPhone = String(phone).replace(/\D/g, '');
                 window.open(`https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
             };
-
             if (loading) return <div className="flex items-center justify-center h-screen bg-orange-50"><div className="animate-spin rounded-full h-12 w-12 border-t-4 border-orange-500 border-t-transparent"></div></div>;
-
             return (
                 <div className="flex h-screen bg-slate-50 text-slate-800 overflow-hidden font-sans text-left">
                     <nav className="w-56 bg-white border-r border-slate-100 flex flex-col py-4 z-20 shadow-sm overflow-y-auto scrollbar-hide print:hidden text-left">
